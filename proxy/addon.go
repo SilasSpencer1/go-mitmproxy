@@ -68,7 +68,8 @@ type Addon interface {
 // implement to rewrite or drop a WebSocket frame before it is forwarded to the
 // peer. It runs after all WebSocketMessage observers, in addon order. Reassign
 // Content to rewrite the payload (any length) or call Drop to swallow the frame;
-// the frame type (opcode) is not mutable.
+// call Prepend to emit additional payloads before it. The frame type (opcode)
+// is not mutable.
 //
 // The *WebSocketMessage passed is the frame recorded in f.WebSocket, mutated in
 // place -- the mutation is both forwarded and kept in the recorded frame.
