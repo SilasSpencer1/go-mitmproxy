@@ -81,6 +81,14 @@ type WebSocketMessageModifier interface {
 	RewriteWebSocketMessage(*Flow, *WebSocketMessage)
 }
 
+// WebSocketMessageFlusher optionally releases retained messages when a source
+// stops sending. fromClient identifies that source. Only Type and Content are
+// used; messages bypass addon hooks and leave before the destination closes.
+// Like modifier hooks, this hook is serialized and must not block.
+type WebSocketMessageFlusher interface {
+	FlushWebSocketMessages(*Flow, bool) []*WebSocketMessage
+}
+
 // BaseAddon do nothing
 type BaseAddon struct{}
 

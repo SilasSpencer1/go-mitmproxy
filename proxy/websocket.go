@@ -196,6 +196,27 @@ func (h *webSocketHandler) forwardMessages(clientWS, serverWS *websocket.Conn, f
 	// Only the blocking reads and the writes run concurrently; see processFrame.
 	var relayMu sync.Mutex
 
+	flush := func(dst *websocket.Conn, fromClient bool) error {
+		relayMu.Lock()
+		var messages []*WebSocketMessage
+		for _, addon := range h.proxy.Addons {
+			if flusher, ok := addon.(WebSocketMessageFlusher); ok {
+				for _, msg := range flusher.FlushWebSocketMessages(f, fromClient) {
+					if msg != nil {
+						messages = append(messages, f.WebSocket.addMessage(msg.Type, append([]byte(nil), msg.Content...), fromClient))
+					}
+				}
+			}
+		}
+		relayMu.Unlock()
+		for _, msg := range messages {
+			if err := dst.WriteMessage(msg.Type, msg.Content); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	errChan := make(chan error, 2)
 
 	// 客户端 -> 服务器
@@ -209,6 +230,9 @@ func (h *webSocketHandler) forwardMessages(clientWS, serverWS *websocket.Conn, f
 		for {
 			msgType, msg, err := clientWS.ReadMessage()
 			if err != nil {
+				if flushErr := flush(serverWS, true); flushErr != nil {
+					err = flushErr
+				}
 				// 判断是否是正常的关闭
 				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 					errChan <- nil // 正常关闭，不返回错误
@@ -242,6 +266,9 @@ func (h *webSocketHandler) forwardMessages(clientWS, serverWS *websocket.Conn, f
 		for {
 			msgType, msg, err := serverWS.ReadMessage()
 			if err != nil {
+				if flushErr := flush(clientWS, false); flushErr != nil {
+					err = flushErr
+				}
 				// 判断是否是正常的关闭
 				if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 					errChan <- nil // 正常关闭，不返回错误
